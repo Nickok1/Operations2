@@ -334,7 +334,7 @@ const SUPA_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsI
 
 async function supaGet(key) {
   try {
-    const r = await fetch(, {
+    const r = await fetch(SUPA_URL + '/rest/v1/ug_sync?key=eq.' + encodeURIComponent(key) + '&select=value', {
       headers: { 'apikey': SUPA_KEY, 'Authorization': 'Bearer ' + SUPA_KEY }
     });
     const data = await r.json();
@@ -344,7 +344,7 @@ async function supaGet(key) {
 
 async function supaSet(key, value) {
   try {
-    await fetch(, {
+    await fetch(SUPA_URL + '/rest/v1/ug_sync', {
       method: 'POST',
       headers: {
         'apikey': SUPA_KEY,
