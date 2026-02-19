@@ -659,7 +659,11 @@ function switchPage(p){
 // ── PROGRESS ──
 function updateProgress(){
   var total=0,done=0;
-  if(activePage==="truck"){total=TRUCK_TOTAL;done=Object.keys(truckChecks).length;}
+  if(activePage==="truck"){
+    total=TRUCK_TOTAL;
+    var propaneDone=Object.keys(propaneStatus).filter(function(k){return propaneStatus[k]&&propaneStatus[k]!=="";}).length;
+    done=Object.keys(truckChecks).length+propaneDone;
+  }
   else if(activePage==="stock"){total=STOCK_TOTAL;done=Object.keys(stockQty).length;}
   else{total=1;done=1;}
   var pct=total?Math.round(done/total*100):0;
