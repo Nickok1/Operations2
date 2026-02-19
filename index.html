@@ -101,6 +101,9 @@
   .item-by { font-size:10px; color:var(--muted); margin-top:2px; font-style:italic; }
   .item-note { font-size:11px; color:var(--gold); margin-top:4px; background:rgba(232,160,32,0.08); border-left:2px solid var(--gold); padding:3px 7px; border-radius:0 5px 5px 0; }
   .note-btn { background:transparent; border:1px solid var(--blue-dim); border-radius:6px; padding:3px 8px; font-size:10px; color:var(--muted); cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:3px; margin-top:5px; }
+  .needs-btn { background:transparent; border:1px solid var(--border); border-radius:6px; padding:3px 8px; font-size:10px; color:var(--muted); cursor:pointer; font-family:'DM Sans',sans-serif; display:inline-flex; align-items:center; gap:3px; margin-top:5px; margin-left:4px; transition:all 0.2s; }
+  .needs-btn.active { background:rgba(232,80,80,0.1); border-color:var(--red); color:var(--red); }
+  .needs-tag { display:inline-block; font-size:10px; background:rgba(232,80,80,0.12); color:var(--red); border:1px solid var(--red); border-radius:4px; padding:1px 6px; margin-top:3px; margin-left:2px; }
   .note-btn.has-note { border-color:var(--gold); color:var(--gold); }
   .stock-item { display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:10px; padding:10px 14px; border-bottom:1px solid rgba(255,255,255,0.04); }
   .stock-item:last-child { border-bottom:none; }
@@ -381,6 +384,7 @@ var TRUCK_SECTIONS = [
   {title:"Fryers",items:["Check oil","Extra canola oil"]},
   {title:"Freezer",items:["4 Gyros","4 French fries","1 Kolokithokeftedes"]},
   {title:"Large Fridge Under Grill",items:["5 chicken thigh","4 chicken breast","10 pack souvlaki","2 large bags cut onions"]},
+  {title:"Upright Fridge Passengers Side",items:["5 bags of cut lettuce","Fill all drinks"]},
   {title:"Water",items:["FILL WATER TANK"]},
   {title:"Catering",items:["Cambros","Delivery bag(s)","Sauces","Catering list added on truck"]},
   {title:"Propane Check",items:["Back Left","Back Right","Drivers Door","Compartment"]},
@@ -402,7 +406,7 @@ var COLORS = ["#4a8fd4","#e86020","#20c8e8","#a040e8","#20d870","#e82060","#e8d0
 
 // ── STATE ──
 var SK = {tc:"ug_tc",tn:"ug_tn",sq:"ug_sq",sn:"ug_sn",th:"ug_th",sh:"ug_sh",date:"ug_date",name:"ug_name"};
-var truckChecks={}, truckNotes={}, stockQty={}, stockNotes={}, truckHistory=[], stockHistory=[], propaneStatus={};
+var truckChecks={}, truckNotes={}, stockQty={}, stockNotes={}, truckHistory=[], stockHistory=[], propaneStatus={}, needsStock={};
 var currentName="", activePage="truck", hType="truck", hView="daily", hDays=7, selWeekDay=null, weekOff=0;
 var noteTarget=null, lastHash="";
 
@@ -423,14 +427,14 @@ function groupByDate(hist){var m={};hist.forEach(function(e){if(!m[e.date])m[e.d
 function loadLocal(){
   try{
     var saved=localStorage.getItem(SK.date), today=todayStr();
-    if(saved!==today){archiveAll(saved);truckChecks={};truckNotes={};stockQty={};stockNotes={};propaneStatus={};localStorage.setItem(SK.date,today);[SK.tc,SK.tn,SK.sq,SK.sn,"ug_ps"].forEach(function(k){localStorage.removeItem(k);});}
-    else{truckChecks=JSON.parse(localStorage.getItem(SK.tc)||"{}");truckNotes=JSON.parse(localStorage.getItem(SK.tn)||"{}");stockQty=JSON.parse(localStorage.getItem(SK.sq)||"{}");stockNotes=JSON.parse(localStorage.getItem(SK.sn)||"{}");propaneStatus=JSON.parse(localStorage.getItem("ug_ps")||"{}");}
+    if(saved!==today){archiveAll(saved);truckChecks={};truckNotes={};stockQty={};stockNotes={};propaneStatus={};needsStock={};localStorage.setItem(SK.date,today);[SK.tc,SK.tn,SK.sq,SK.sn,"ug_ps","ug_ns"].forEach(function(k){localStorage.removeItem(k);});}
+    else{truckChecks=JSON.parse(localStorage.getItem(SK.tc)||"{}");truckNotes=JSON.parse(localStorage.getItem(SK.tn)||"{}");stockQty=JSON.parse(localStorage.getItem(SK.sq)||"{}");stockNotes=JSON.parse(localStorage.getItem(SK.sn)||"{}");propaneStatus=JSON.parse(localStorage.getItem("ug_ps")||"{}");needsStock=JSON.parse(localStorage.getItem("ug_ns")||"{}");}
     truckHistory=JSON.parse(localStorage.getItem(SK.th)||"[]");stockHistory=JSON.parse(localStorage.getItem(SK.sh)||"[]");currentName=localStorage.getItem(SK.name)||"";
   }catch(e){truckChecks={};truckNotes={};stockQty={};stockNotes={};truckHistory=[];stockHistory=[];}
 }
 function saveLocal(){
   try{
-    localStorage.setItem(SK.tc,JSON.stringify(truckChecks));localStorage.setItem(SK.tn,JSON.stringify(truckNotes));localStorage.setItem("ug_ps",JSON.stringify(propaneStatus));
+    localStorage.setItem(SK.tc,JSON.stringify(truckChecks));localStorage.setItem(SK.tn,JSON.stringify(truckNotes));localStorage.setItem("ug_ps",JSON.stringify(propaneStatus));localStorage.setItem("ug_ns",JSON.stringify(needsStock));
     localStorage.setItem(SK.sq,JSON.stringify(stockQty));localStorage.setItem(SK.sn,JSON.stringify(stockNotes));
     localStorage.setItem(SK.th,JSON.stringify(truckHistory));localStorage.setItem(SK.sh,JSON.stringify(stockHistory));
     localStorage.setItem(SK.date,todayStr());if(currentName)localStorage.setItem(SK.name,currentName);
@@ -450,7 +454,7 @@ function archiveAll(dateStr){
 async function syncToCloud(){
   setSyncStatus("syncing");
   try{
-    var p=JSON.stringify({tc:truckChecks,tn:truckNotes,sq:stockQty,sn:stockNotes,ps:propaneStatus,date:todayStr()});
+    var p=JSON.stringify({tc:truckChecks,tn:truckNotes,sq:stockQty,sn:stockNotes,ps:propaneStatus,ns:needsStock,date:todayStr()});
     await supaSet("ug_ops",p);
     setSyncStatus("ok");lastHash=p;
   }catch(e){setSyncStatus("error");}
@@ -467,6 +471,7 @@ async function syncFromCloud(){
     Object.keys(remote.sq||{}).forEach(function(k){if(!stockQty[k]||(remote.sq[k].time>(stockQty[k].time||""))){stockQty[k]=remote.sq[k];changed=true;}});
     Object.keys(remote.sn||{}).forEach(function(k){if(stockNotes[k]!==remote.sn[k]){stockNotes[k]=remote.sn[k];changed=true;}});
     Object.keys(remote.ps||{}).forEach(function(k){if(propaneStatus[k]!==remote.ps[k]){propaneStatus[k]=remote.ps[k];changed=true;}});
+    Object.keys(remote.ns||{}).forEach(function(k){if(needsStock[k]!==remote.ns[k]){needsStock[k]=remote.ns[k];changed=true;}});
     if(changed){saveLocal();if(activePage==="truck")refreshTruck();else if(activePage==="stock")refreshStock();updateProgress();lastHash=rs;}
   }catch(e){}
 }
@@ -718,6 +723,73 @@ async function toggleTruck(si,ii){
   updateProgress();await syncToCloud();
 }
 
+// ── TWILIO CONFIG ──
+var TWILIO_SID   = "ACa27ea79b76f8552c10f4248e77a0d7bb";
+var TWILIO_TOKEN = "1ae23240f25eb69317c3547044a13364";
+var TWILIO_FROM  = "+18444970872";
+var ALERT_PHONES = ["+13473204030","+13477238476","+17183095545","+19175734246","+19296001111"];
+
+async function sendSMS(to, body){
+  try{
+    var resp = await fetch(SUPA_URL+"/functions/v1/send-sms",{
+      method:"POST",
+      headers:{"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({to:to,body:body,from:TWILIO_FROM,sid:TWILIO_SID,token:TWILIO_TOKEN})
+    });
+    var result = await resp.json();
+    console.log("SMS result:", JSON.stringify(result));
+    return result;
+  }catch(e){ console.log("SMS error:",e); }
+}
+
+async function sendStockAlert(itemName, qty){
+  var time = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
+  var msg = "Uncle Gussys Stock Alert\n" +
+            "Item: " + itemName + "\n" +
+            (qty ? "Qty needed: " + qty + "\n" : "") +
+            "Requested by: " + (currentName||"Team") + "\n" +
+            "Time: " + time;
+  for(var i=0;i<ALERT_PHONES.length;i++){
+    await sendSMS(ALERT_PHONES[i], msg);
+  }
+}
+
+async function toggleNeedsStock(si, ii){
+  if(!currentUser){showLoginScreen();return;}
+  var key=tk(si,ii);
+  var itemName = TRUCK_SECTIONS[si].items[ii];
+  if(needsStock[key]){
+    // toggle off
+    delete needsStock[key];
+    saveLocal();
+    var el=document.getElementById("titem-"+si+"-"+ii);
+    if(el)el.outerHTML=tItemHTML(si,ii,itemName);
+    await syncToCloud();
+  } else {
+    // toggle on - ask for quantity
+    var qty = prompt("How many " + itemName + " needed?\n(Leave blank to just send alert)");
+    if(qty === null) return; // cancelled
+    needsStock[key] = {qty: qty||"", by: currentName, time: new Date().toISOString()};
+    saveLocal();
+    var el=document.getElementById("titem-"+si+"-"+ii);
+    if(el)el.outerHTML=tItemHTML(si,ii,itemName);
+    await syncToCloud();
+    // Send SMS alert
+    await sendStockAlert(itemName, qty);
+    // Show confirmation
+    var allOk = true;
+    for(var i=0;i<ALERT_PHONES.length;i++){
+      var r = await sendSMS(ALERT_PHONES[i], msg);
+      if(!r || r.error) allOk = false;
+    }
+    var banner = document.createElement("div");
+    banner.style.cssText="position:fixed;top:100px;left:50%;transform:translateX(-50%);background:"+(allOk?"#0d2018":"#2d0a0a")+";border:1px solid "+(allOk?"var(--green)":"var(--red)")+";border-radius:10px;padding:12px 20px;font-size:13px;color:"+(allOk?"var(--green)":"var(--red)")+";z-index:999;text-align:center;max-width:280px;";
+    banner.textContent = allOk ? "📱 Alert sent to all team members!" : "⚠️ Alert failed — check console for details";
+    document.body.appendChild(banner);
+    setTimeout(function(){banner.remove();},4000);
+  }
+}
+
 async function setPropane(item, status){
   if(!currentUser){showLoginScreen();return;}
   propaneStatus[item] = propaneStatus[item]===status ? "" : status;
@@ -747,18 +819,57 @@ function renderStock(){
   STOCK_SECTIONS.forEach(function(sec,si){
     var ic=sec.items.filter(function(_,ii){return stockQty[sk2(si,ii)];}).length;
     var div=document.createElement("div");div.className="section";
-    div.innerHTML="<div class=\"sec-hdr\"><div style=\"display:flex;align-items:center\"><div class=\"sec-dot\" style=\"background:"+sec.color+"\"></div><div class=\"sec-title\">"+esc(sec.title)+"</div></div><div style=\"display:flex;align-items:center;gap:6px\"><span class=\"sec-badge\" id=\"sctr-"+si+"\">"+ic+"/"+sec.items.length+"</span><span class=\"sec-done "+(ic===sec.items.length?"visible":"")+" \" id=\"sdone-"+si+"\">Done</span></div></div><div id=\"sitems-"+si+"\">"+sec.items.map(function(item,ii){return sItemHTML(si,ii,item);}).join("")+"</div>";
+    div.innerHTML="<div class=\"sec-hdr\"><div style=\"display:flex;align-items:center\"><div class=\"sec-dot\" style=\"background:"+sec.color+"\"></div><div class=\"sec-title\">"+esc(sec.title)+"</div></div><div style=\"display:flex;align-items:center;gap:6px\"><span class=\"sec-badge\" id=\"sctr-"+si+"\">"+ic+"/"+sec.items.length+"</span><span class=\"sec-done "+(ic===sec.items.length?"visible":"")+" \" id=\"sdone-"+si+"\">Done</span></div></div><div id=\"sitems-"+si+"\"></div>";
+    var container=div.querySelector("#sitems-"+si);
+    sec.items.forEach(function(item,ii){ container.appendChild(sItemHTML(si,ii,item)); });
     root.appendChild(div);
   });
 }
 function sItemHTML(si,ii,item){
-  var key=sk2(si,ii),entry=stockQty[key],note=stockNotes[key]||"",hasQty=!!entry,qty=entry?entry.qty:"",by=entry?(entry.by||""):"";
-  return "<div class=\"stock-item "+(hasQty?"counted":"")+" \" id=\"sitem-"+si+"-"+ii+"\"><div><div class=\"si-name\">"+esc(item.name)+"</div>"+(hasQty?"<div class=\"si-by\">"+esc(by)+"</div>":"")+(note?"<div class=\"si-note\">"+esc(note)+"</div>":"")+"</div><div class=\"qty-group\"><input class=\"qty-inline "+(hasQty?"has-qty":"")+" \" id=\"qi-"+si+"-"+ii+"\" type=\"number\" min=\"0\" placeholder=\"—\" value=\""+(hasQty?qty:"")+" \" onchange=\"commitQty("+si+","+ii+")\" onblur=\"commitQty("+si+","+ii+")\" onfocus=\"if(!currentUser){this.blur();showLoginScreen();}\"><span class=\"qty-unit\">"+esc(item.unit)+"</span></div><button class=\"snote-btn "+(note?"has-note":"")+" \" onclick=\"openNote('stock',"+si+","+ii+")\">📝</button></div>";
+  var key=sk2(si,ii),entry=stockQty[key],note=stockNotes[key]||"",hasQty=!!entry;
+  var qty=hasQty?entry.qty:"",by=hasQty?(entry.by||""):"";
+  var d=document.createElement("div");
+  d.className="stock-item"+(hasQty?" counted":"");
+  d.id="sitem-"+si+"-"+ii;
+  var left='<div><div class="si-name">'+esc(item.name)+'</div>';
+  if(hasQty) left+='<div class="si-by">'+esc(by)+'</div>';
+  if(note)   left+='<div class="si-note">'+esc(note)+'</div>';
+  left+='</div>';
+  var middle='<div class="qty-group">'
+    +'<input class="qty-inline'+(hasQty?" has-qty":"")+'" id="qi-'+si+'-'+ii+'" type="number" min="0" placeholder="—" value="'+(hasQty?qty:"")+'">'
+    +'<span class="qty-unit">'+esc(item.unit)+'</span>'
+    +'</div>';
+  var right='<button class="snote-btn'+(note?" has-note":"")+'" id="snb-'+si+'-'+ii+'">📝</button>';
+  d.innerHTML=left+middle+right;
+  var input=d.querySelector("input");
+  input.addEventListener("change",function(){commitQty(si,ii);});
+  input.addEventListener("blur",function(){commitQty(si,ii);});
+  input.addEventListener("focus",function(){if(!currentUser){this.blur();showLoginScreen();}});
+  d.querySelector("button").addEventListener("click",function(){openNote("stock",si,ii);});
+  return d;
 }
-function refreshStockRow(si,ii){var el=document.getElementById("sitem-"+si+"-"+ii);if(el)el.outerHTML=sItemHTML(si,ii,STOCK_SECTIONS[si].items[ii]);var ic=STOCK_SECTIONS[si].items.filter(function(_,ii2){return stockQty[sk2(si,ii2)];}).length;var c=document.getElementById("sctr-"+si),d=document.getElementById("sdone-"+si);if(c)c.textContent=ic+"/"+STOCK_SECTIONS[si].items.length;if(d)d.classList.toggle("visible",ic===STOCK_SECTIONS[si].items.length);}
-function refreshStock(){STOCK_SECTIONS.forEach(function(sec,si){var ic=sec.items.filter(function(_,ii){return stockQty[sk2(si,ii)];}).length;var c=document.getElementById("sctr-"+si),d=document.getElementById("sdone-"+si);if(c)c.textContent=ic+"/"+sec.items.length;if(d)d.classList.toggle("visible",ic===sec.items.length);sec.items.forEach(function(item,ii){var el=document.getElementById("sitem-"+si+"-"+ii);if(el)el.outerHTML=sItemHTML(si,ii,item);});});}
+function refreshStockRow(si,ii){
+  var el=document.getElementById("sitem-"+si+"-"+ii);
+  if(el){ var newEl=sItemHTML(si,ii,STOCK_SECTIONS[si].items[ii]); el.parentNode.replaceChild(newEl,el); }
+  var ic=STOCK_SECTIONS[si].items.filter(function(_,ii2){return stockQty[sk2(si,ii2)];}).length;
+  var c=document.getElementById("sctr-"+si),d=document.getElementById("sdone-"+si);
+  if(c)c.textContent=ic+"/"+STOCK_SECTIONS[si].items.length;
+  if(d)d.classList.toggle("visible",ic===STOCK_SECTIONS[si].items.length);
+}
+function refreshStock(){
+  STOCK_SECTIONS.forEach(function(sec,si){
+    var ic=sec.items.filter(function(_,ii){return stockQty[sk2(si,ii)];}).length;
+    var c=document.getElementById("sctr-"+si),d=document.getElementById("sdone-"+si);
+    if(c)c.textContent=ic+"/"+sec.items.length;
+    if(d)d.classList.toggle("visible",ic===sec.items.length);
+    sec.items.forEach(function(item,ii){
+      var el=document.getElementById("sitem-"+si+"-"+ii);
+      if(el){ var newEl=sItemHTML(si,ii,item); el.parentNode.replaceChild(newEl,el); }
+    });
+  });
+}
 async function commitQty(si,ii){
-  if(!currentName)return;
+  if(!currentUser)return;
   var input=document.getElementById("qi-"+si+"-"+ii);if(!input)return;
   var raw=input.value.trim(),key=sk2(si,ii);
   if(raw===""||raw===null){if(stockQty[key]){delete stockQty[key];saveLocal();refreshStockRow(si,ii);updateProgress();await syncToCloud();}return;}
@@ -934,7 +1045,7 @@ document.getElementById("nmClear").addEventListener("click", function(){ clearNo
 
 // ── MIDNIGHT RESET ──
 var lastDate=todayStr();
-setInterval(function(){var today=todayStr();if(today!==lastDate){lastDate=today;archiveAll(localStorage.getItem(SK.date));truckChecks={};truckNotes={};stockQty={};stockNotes={};propaneStatus={};localStorage.setItem(SK.date,today);[SK.tc,SK.tn,SK.sq,SK.sn,"ug_ps"].forEach(function(k){localStorage.removeItem(k);});if(activePage==="truck")renderTruck();else if(activePage==="stock")renderStock();updateProgress();syncToCloud();}},60000);
+setInterval(function(){var today=todayStr();if(today!==lastDate){lastDate=today;archiveAll(localStorage.getItem(SK.date));truckChecks={};truckNotes={};stockQty={};stockNotes={};propaneStatus={};needsStock={};localStorage.setItem(SK.date,today);[SK.tc,SK.tn,SK.sq,SK.sn,"ug_ps","ug_ns"].forEach(function(k){localStorage.removeItem(k);});if(activePage==="truck")renderTruck();else if(activePage==="stock")renderStock();updateProgress();syncToCloud();}},60000);
 
 // ── POLL SYNC ──
 setInterval(function(){syncFromCloud();if(activePage==="history")fetchHistories();},5000);
