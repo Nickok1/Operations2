@@ -467,7 +467,7 @@ async function syncToCloud(){
   try{
     var p=JSON.stringify({tc:truckChecks,tn:truckNotes,sq:stockQty,sn:stockNotes,ps:propaneStatus,ns:needsStock,date:todayStr()});
     await supaSet("ug_ops",p);
-    setSyncStatus("ok");lastHash=p;
+    setSyncStatus("ok");
   }catch(e){setSyncStatus("error");}
 }
 async function syncFromCloud(){
@@ -475,44 +475,18 @@ async function syncFromCloud(){
   try{
     var val=await supaGet("ug_ops");
     if(!val)return;
-    var remote=JSON.parse(val),rs=JSON.stringify(remote);
+    var remote=JSON.parse(val);
     if(remote.date!==todayStr())return;
-    if(rs===lastHash)return;
-    lastHash=rs;
-    // Only apply remote data if it has more checks than local (remote wins)
-    var remoteTC=remote.tc||{},remoteSQ=remote.sq||{};
-    var changed=false;
-    // Truck: add any remote checks not in local
-    Object.keys(remoteTC).forEach(function(k){
-      if(!truckChecks[k]){truckChecks[k]=remoteTC[k];changed=true;}
-    });
-    // Truck: remove local checks that remote has deleted
-    Object.keys(truckChecks).forEach(function(k){
-      if(!remoteTC[k]){delete truckChecks[k];changed=true;}
-    });
-    // Notes
-    Object.keys(remote.tn||{}).forEach(function(k){
-      if(truckNotes[k]!==remote.tn[k]){truckNotes[k]=remote.tn[k];changed=true;}
-    });
-    // Stock qty
-    Object.keys(remoteSQ).forEach(function(k){
-      if(!stockQty[k]){stockQty[k]=remoteSQ[k];changed=true;}
-    });
-    Object.keys(stockQty).forEach(function(k){
-      if(!remoteSQ[k]){delete stockQty[k];changed=true;}
-    });
-    Object.keys(remote.sn||{}).forEach(function(k){
-      if(stockNotes[k]!==remote.sn[k]){stockNotes[k]=remote.sn[k];changed=true;}
-    });
-    Object.keys(remote.ps||{}).forEach(function(k){
-      if(propaneStatus[k]!==remote.ps[k]){propaneStatus[k]=remote.ps[k];changed=true;}
-    });
-    if(changed){
-      saveLocal();
-      if(activePage==="truck")renderTruck();
-      else if(activePage==="stock")renderStock();
-      updateProgress();
-    }
+    truckChecks=remote.tc||{};
+    truckNotes=remote.tn||{};
+    stockQty=remote.sq||{};
+    stockNotes=remote.sn||{};
+    propaneStatus=remote.ps||{};
+    needsStock=remote.ns||{};
+    saveLocal();
+    renderTruck();
+    renderStock();
+    updateProgress();
   }catch(e){}
 }
 async function syncHistories(){
