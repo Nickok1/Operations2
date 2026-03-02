@@ -320,6 +320,7 @@
   </div>
 </div>
 
+<div id="debugBox" style="background:#1a0a00;color:#ffaa00;font-size:11px;padding:6px 12px;font-family:monospace;word-break:break-all;border-bottom:1px solid #333;">debug loading...</div>
 <main>
   <div class="page active" id="pageTruck">
     <div class="complete-banner" id="completeBanner"><h2>&#x1F525; Truck Is Loaded!</h2><p id="completeSubtitle"></p></div>
@@ -471,12 +472,19 @@ async function syncToCloud(){
   }catch(e){setSyncStatus("error");}
 }
 async function syncFromCloud(){
-  if(!currentUser)return;
+  var dbg=document.getElementById("debugBox");
+  if(!currentUser){dbg.textContent="sync skipped: not logged in";return;}
   try{
+    dbg.textContent="fetching...";
     var val=await supaGet("ug_ops");
-    if(!val)return;
+    if(!val){dbg.textContent="supabase returned null";return;}
     var remote=JSON.parse(val);
-    if(remote.date!==todayStr())return;
+    var remoteDate=remote.date||"none";
+    var today=todayStr();
+    var tcCount=Object.keys(remote.tc||{}).length;
+    var sqCount=Object.keys(remote.sq||{}).length;
+    dbg.textContent="remote date:"+remoteDate+" today:"+today+" tc:"+tcCount+" sq:"+sqCount+" user:"+currentUser.name;
+    if(remote.date!==today){dbg.textContent+=" SKIP(date mismatch)";return;}
     truckChecks=remote.tc||{};
     truckNotes=remote.tn||{};
     stockQty=remote.sq||{};
@@ -487,7 +495,8 @@ async function syncFromCloud(){
     renderTruck();
     renderStock();
     updateProgress();
-  }catch(e){}
+    dbg.textContent+=" APPLIED";
+  }catch(e){dbg.textContent="ERROR:"+e.message;}
 }
 async function syncHistories(){
   try{await supaSet("ug_th",JSON.stringify(truckHistory));await supaSet("ug_sh",JSON.stringify(stockHistory));}catch(e){}
@@ -579,7 +588,6 @@ function checkPin(){
     renderTruck();
     renderStock();
     updateProgress();
-    syncToCloud();
     syncFromCloud();
   } else {
     for(var i=0;i<4;i++) document.getElementById("pd"+i).classList.add("error");
