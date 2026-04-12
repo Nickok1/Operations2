@@ -15,9 +15,9 @@ jobs:
       - name: Ping Supabase
         run: |
           HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-            --max-time 30 \
-            "${{ secrets.SUPABASE_URL }}/rest/v1/?apikey=${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+           --max-time 30 \
+            "https://poforahbbvnxxkrrajge.supabase.co/rest/v1/?apikey=${{ secrets.SUPABASE_ANON_KEY }}" \
+
             -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
 
           echo "HTTP Status: $HTTP_STATUS"
