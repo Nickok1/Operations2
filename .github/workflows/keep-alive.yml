@@ -2,15 +2,29 @@ name: Keep Supabase Alive
 
 on:
   schedule:
-    - cron: '0 12 */5 * *'
+    - cron: '0 */6 * * *'
   workflow_dispatch:
 
 jobs:
   ping:
+    name: Keep Supabase Alive / ping
     runs-on: ubuntu-latest
+    timeout-minutes: 5
+
     steps:
       - name: Ping Supabase
         run: |
-          curl -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/" \
-            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
-            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}"
+          HTTP_STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+            --max-time 30 \
+            "${{ secrets.SUPABASE_URL }}/rest/v1/?apikey=${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}" \
+            -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}")
+
+          echo "HTTP Status: $HTTP_STATUS"
+
+          if [ "$HTTP_STATUS" -ge 200 ] && [ "$HTTP_STATUS" -lt 500 ]; then
+            echo "✅ Supabase is alive (status $HTTP_STATUS)"
+          else
+            echo "❌ Supabase ping failed (status $HTTP_STATUS)"
+            exit 1
+          fi
