@@ -311,7 +311,7 @@
     <div class="loader-avatar" id="loaderAvatar">?</div>
     <span class="loader-name" id="loaderName">&#8212;</span>
     <span class="change-link" onclick="changeName()">change</span>
-    <span class="sync-pill"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">connecting...</span></span>
+    <span class="sync-pill" onclick="manualRetrySync()" style="cursor:pointer;"><span class="sync-dot" id="syncDot"></span><span id="syncLabel">connecting...</span></span>
   </div>
   <div class="status-right">
     <span class="count-text" id="countText">0 / 0</span>
@@ -320,6 +320,10 @@
   </div>
 </div>
 
+<div id="syncWarning" style="display:none;align-items:center;justify-content:space-between;gap:10px;background:#3d0a0a;color:#ffb0b0;font-size:12px;padding:9px 14px;border-bottom:1px solid var(--red);">
+<span id="syncWarningText">Couldn't save to the server — your checks are saved on this device.</span>
+<button onclick="manualRetrySync()" style="flex-shrink:0;background:transparent;border:1px solid #ffb0b0;color:#ffb0b0;border-radius:14px;padding:4px 10px;font-size:11px;cursor:pointer;">Retry now</button>
+</div>
 <div id="debugBox" style="background:#1a0a00;color:#ffaa00;font-size:11px;padding:6px 12px;font-family:monospace;word-break:break-all;border-bottom:1px solid #333;">debug loading...</div>
 <main>
   <div class="page active" id="pageTruck">
@@ -371,12 +375,14 @@ async function supaGet(key) {
 }
 async function supaSet(key, value) {
   try {
-    await fetch(SUPA_URL + "/rest/v1/ug_sync", {
+    var r = await fetch(SUPA_URL + "/rest/v1/ug_sync", {
       method: "POST",
       headers: Object.assign({}, supaHeaders(), { "Prefer": "resolution=merge-duplicates" }),
       body: JSON.stringify({ key: key, value: value, updated_at: new Date().toISOString() })
     });
-  } catch(e) {}
+    if (!r.ok) { return false; }
+    return true;
+  } catch(e) { return false; }
 }
 
 // ── DATA ──
@@ -463,13 +469,40 @@ function archiveAll(dateStr){
 }
 
 // ── SUPABASE SYNC ──
+var syncRetryTimer=null, pendingRetries=0;
 async function syncToCloud(){
   setSyncStatus("syncing");
-  try{
-    var p=JSON.stringify({tc:truckChecks,tn:truckNotes,sq:stockQty,sn:stockNotes,ps:propaneStatus,ns:needsStock,date:todayStr()});
-    await supaSet("ug_ops",p);
+  var p=JSON.stringify({tc:truckChecks,tn:truckNotes,sq:stockQty,sn:stockNotes,ps:propaneStatus,ns:needsStock,date:todayStr()});
+  var ok=false;
+  try{ ok = await supaSet("ug_ops",p); }catch(e){ ok=false; }
+  if(ok){
+    pendingRetries=0;
     setSyncStatus("ok");
-  }catch(e){setSyncStatus("error");}
+    hideSyncWarning();
+    if(syncRetryTimer){clearTimeout(syncRetryTimer);syncRetryTimer=null;}
+  } else {
+    setSyncStatus("error");
+    pendingRetries++;
+    showSyncWarning();
+    if(syncRetryTimer)clearTimeout(syncRetryTimer);
+    syncRetryTimer=setTimeout(function(){ syncToCloud(); }, 15000);
+  }
+}
+function showSyncWarning(){
+  var w=document.getElementById("syncWarning");
+  if(!w) return;
+  w.style.display="flex";
+  w.querySelector("#syncWarningText").textContent = pendingRetries>1
+    ? "Still can't reach the server — your checks are saved on this device only ("+pendingRetries+" attempts). Retrying..."
+    : "Couldn't save to the server — your checks are saved on this device and will sync once connection is back.";
+}
+function hideSyncWarning(){
+  var w=document.getElementById("syncWarning");
+  if(w) w.style.display="none";
+}
+function manualRetrySync(){
+  if(syncRetryTimer){clearTimeout(syncRetryTimer);syncRetryTimer=null;}
+  syncToCloud();
 }
 async function syncFromCloud(){
   var dbg=document.getElementById("debugBox");
