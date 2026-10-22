@@ -786,25 +786,8 @@ async function toggleTruck(si,ii){
   updateProgress();await syncToCloud();
 }
 
-// ── TWILIO CONFIG ──
-var TWILIO_SID   = "ACa27ea79b76f8552c10f4248e77a0d7bb";
-var TWILIO_TOKEN = "1ae23240f25eb69317c3547044a13364";
-var TWILIO_FROM  = "+18444970872";
-var ALERT_PHONES = ["+13473204030","+13477238476","+17183095545","+19175734246","+19296001111"];
-
-async function sendSMS(to, body){
-  try{
-    var resp = await fetch(SUPA_URL+"/functions/v1/send-sms",{
-      method:"POST",
-      headers:{"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json"},
-      body:JSON.stringify({to:to,body:body,from:TWILIO_FROM,sid:TWILIO_SID,token:TWILIO_TOKEN})
-    });
-    var result = await resp.json();
-    console.log("SMS result:", JSON.stringify(result));
-    return result;
-  }catch(e){ console.log("SMS error:",e); }
-}
-
+// ── SMS ALERTS ──
+// Twilio keys and phone list live in Supabase Secrets; the send-sms function texts everyone.
 async function sendStockAlert(itemName, qty){
   var time = new Date().toLocaleTimeString([],{hour:"2-digit",minute:"2-digit"});
   var msg = "Uncle Gussys Stock Alert\n" +
@@ -812,8 +795,18 @@ async function sendStockAlert(itemName, qty){
             (qty ? "Qty needed: " + qty + "\n" : "") +
             "Requested by: " + (currentName||"Team") + "\n" +
             "Time: " + time;
-  for(var i=0;i<ALERT_PHONES.length;i++){
-    await sendSMS(ALERT_PHONES[i], msg);
+  try{
+    var resp = await fetch(SUPA_URL+"/functions/v1/send-sms",{
+      method:"POST",
+      headers:{"apikey":SUPA_KEY,"Authorization":"Bearer "+SUPA_KEY,"Content-Type":"application/json"},
+      body:JSON.stringify({body:msg})
+    });
+    var result = await resp.json();
+    console.log("SMS result:", JSON.stringify(result));
+    return result;
+  }catch(e){
+    console.log("SMS error:",e);
+    return {success:false, error:String(e)};
   }
 }
 
@@ -835,12 +828,17 @@ async function toggleNeedsStock(si, ii){
     var el=document.getElementById("titem-"+si+"-"+ii);
     if(el)el.outerHTML=tItemHTML(si,ii,itemName);
     await syncToCloud();
-    await sendStockAlert(itemName, qty);
+    var r = await sendStockAlert(itemName, qty);
+    var ok = r && r.success;
     var banner = document.createElement("div");
-    banner.style.cssText="position:fixed;top:100px;left:50%;transform:translateX(-50%);background:#0d2018;border:1px solid var(--green);border-radius:10px;padding:12px 20px;font-size:13px;color:var(--green);z-index:999;text-align:center;max-width:280px;";
-    banner.textContent = "📱 Alert sent to all team members!";
+    banner.style.cssText="position:fixed;top:100px;left:50%;transform:translateX(-50%);background:"+(ok?"#0d2018":"#2d0a0a")+";border:1px solid "+(ok?"var(--green)":"var(--red)")+";border-radius:10px;padding:12px 20px;font-size:13px;color:"+(ok?"var(--green)":"var(--red)")+";z-index:999;text-align:center;max-width:280px;";
+    if(ok){ banner.textContent = "📱 Alert sent to all team members!"; }
+    else {
+      var why = (r && r.failed && r.failed.length) ? (r.failed.length+" failed — code "+(r.failed[0].code||"?")+": "+(r.failed[0].error||"")) : ((r&&r.error)||"unknown error");
+      banner.textContent = "⚠️ Alert failed: " + why;
+    }
     document.body.appendChild(banner);
-    setTimeout(function(){banner.remove();},4000);
+    setTimeout(function(){banner.remove();},ok?4000:9000);
   }
 }
 
